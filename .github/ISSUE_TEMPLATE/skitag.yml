@@ -1,0 +1,36 @@
+name: 🎿 Neuer Skitag
+description: Trage einen neuen Skitag ein, um anien.me automatisch zu aktualisieren
+title: "[Skigebiet eintragen]"
+body:
+  - type: input
+    id: resort
+    attributes:
+      label: Skigebiet
+      description: In welchem Skigebiet warst du unterwegs?
+      placeholder: z.B. Nassfeld, Gerlitzen Alpe, Bad Kleinkirchheim...
+    validations:
+      required: true
+  - type: input
+    id: date
+    attributes:
+      label: Datum
+      description: Wann warst du skifahren? (Leer lassen für heute)
+      placeholder: z.B. 14.12.2024
+    validations:
+      required: false
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notizen
+      description: Wie war das Wetter, die Schneeverhältnisse oder Begleitung?
+      placeholder: z.B. Kaiserwetter, Pulverschnee, Weltcup-Abfahrt offen...
+    validations:
+      required: false
+  - type: input
+    id: price
+    attributes:
+      label: Ticketpreis Jugend (optional)
+      description: Falls du den genauen bezahlten Preis kennst. Ansonsten recherchiert Gemini automatisch!
+      placeholder: z.B. 56.50
+    validations:
+      required: false
