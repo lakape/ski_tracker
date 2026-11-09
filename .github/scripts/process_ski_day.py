@@ -4,6 +4,8 @@ import json
 import os
 import re
 import sys
+import time
+import urllib.error
 import urllib.request
 from datetime import datetime
 
@@ -126,42 +128,63 @@ Antworte AUSSCHLIESSLICH mit einem gültigen JSON-Objekt (ohne Markdown oder Erk
   "source": "Kurze Quellenangabe oder URL"
 }}"""
 
-    payload = {
+    base_payload = {
         "contents": [{"parts": [{"text": prompt}]}],
-        "tools": [{"google_search": {}}],
         "generationConfig": {"temperature": 0.1},
     }
 
+    models = ("gemini-flash-latest", "gemini-3.5-flash", "gemini-3.8-flash", "gemini-3-flash-preview")
     last_error = "Keine gültige Antwort erhalten"
-    for model in ("gemini-3.8-flash", "gemini-2.5-flash"):
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-        try:
-            req = urllib.request.Request(
-                url,
-                data=json.dumps(payload).encode("utf-8"),
-                headers={
-                    "Content-Type": "application/json",
-                    "x-goog-api-key": api_key,
-                },
-            )
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-                candidates = data.get("candidates", [])
-                if candidates:
-                    parts = candidates[0].get("content", {}).get("parts", [])
-                    text = "\n".join(p.get("text", "") for p in parts if "text" in p).strip()
-                    json_match = re.search(r"\{.*\}", text, re.DOTALL)
-                    if json_match:
-                        res = json.loads(json_match.group(0))
-                        official_resort = res.get("resort") or resort
-                        price_val = parse_price(str(res.get("price", "")))
-                        source = res.get("source", f"Gemini Websuche ({model})")
-                        if price_val is not None:
-                            return official_resort, price_val, source
-                last_error = f"Unerwartete Antwort von {model}"
-        except Exception as e:
-            print(f"Fehler bei Gemini API Aufruf ({model}): {e}")
-            last_error = str(e)
+
+    # Erst mit Google Search Grounding probieren, bei Quota/429 als Fallback ohne Tool
+    for use_search in (True, False):
+        payload = dict(base_payload)
+        if use_search:
+            payload["tools"] = [{"google_search": {}}]
+
+        for model in models:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+            for attempt in range(2):
+                try:
+                    req = urllib.request.Request(
+                        url,
+                        data=json.dumps(payload).encode("utf-8"),
+                        headers={
+                            "Content-Type": "application/json",
+                            "x-goog-api-key": api_key,
+                        },
+                    )
+                    with urllib.request.urlopen(req, timeout=30) as resp:
+                        data = json.loads(resp.read().decode("utf-8"))
+                        candidates = data.get("candidates", [])
+                        if candidates:
+                            parts = candidates[0].get("content", {}).get("parts", [])
+                            text = "\n".join(p.get("text", "") for p in parts if "text" in p).strip()
+                            json_match = re.search(r"\{.*\}", text, re.DOTALL)
+                            if json_match:
+                                res = json.loads(json_match.group(0))
+                                official_resort = res.get("resort") or resort
+                                price_val = parse_price(str(res.get("price", "")))
+                                mode_label = "Websuche" if use_search else "ohne Websuche"
+                                source = res.get("source") or f"Gemini {model} ({mode_label})"
+                                if not use_search:
+                                    source = f"{source} [ohne Live-Suche]"
+                                if price_val is not None:
+                                    return official_resort, price_val, source
+                        last_error = f"Unerwartete Antwort von {model}"
+                        break
+                except urllib.error.HTTPError as e:
+                    err_body = e.read().decode("utf-8", errors="ignore")
+                    print(f"Fehler bei Gemini API Aufruf ({model}, search={use_search}, attempt={attempt+1}): HTTP {e.code} - {err_body}")
+                    last_error = f"HTTP {e.code}"
+                    if e.code == 429 and attempt == 0:
+                        time.sleep(3)
+                        continue
+                    break
+                except Exception as e:
+                    print(f"Fehler bei Gemini API Aufruf ({model}, search={use_search}): {e}")
+                    last_error = str(e)
+                    break
 
     return None, None, last_error
 
