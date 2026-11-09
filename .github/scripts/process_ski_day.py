@@ -126,37 +126,44 @@ Antworte AUSSCHLIESSLICH mit einem gültigen JSON-Objekt (ohne Markdown oder Erk
   "source": "Kurze Quellenangabe oder URL"
 }}"""
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
         "tools": [{"google_search": {}}],
         "generationConfig": {"temperature": 0.1},
     }
 
-    try:
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-        )
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            candidates = data.get("candidates", [])
-            if candidates:
-                parts = candidates[0].get("content", {}).get("parts", [])
-                text = "\n".join(p.get("text", "") for p in parts if "text" in p).strip()
-                json_match = re.search(r"\{.*\}", text, re.DOTALL)
-                if json_match:
-                    res = json.loads(json_match.group(0))
-                    official_resort = res.get("resort") or resort
-                    price_val = parse_price(str(res.get("price", "")))
-                    source = res.get("source", "Gemini Websuche")
-                    if price_val is not None:
-                        return official_resort, price_val, source
-            return None, None, "Unerwartete Gemini-Antwort"
-    except Exception as e:
-        print(f"Fehler bei Gemini API Aufruf: {e}")
-        return None, None, str(e)
+    last_error = "Keine gültige Antwort erhalten"
+    for model in ("gemini-3.8-flash", "gemini-2.5-flash"):
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        try:
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={
+                    "Content-Type": "application/json",
+                    "x-goog-api-key": api_key,
+                },
+            )
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                candidates = data.get("candidates", [])
+                if candidates:
+                    parts = candidates[0].get("content", {}).get("parts", [])
+                    text = "\n".join(p.get("text", "") for p in parts if "text" in p).strip()
+                    json_match = re.search(r"\{.*\}", text, re.DOTALL)
+                    if json_match:
+                        res = json.loads(json_match.group(0))
+                        official_resort = res.get("resort") or resort
+                        price_val = parse_price(str(res.get("price", "")))
+                        source = res.get("source", f"Gemini Websuche ({model})")
+                        if price_val is not None:
+                            return official_resort, price_val, source
+                last_error = f"Unerwartete Antwort von {model}"
+        except Exception as e:
+            print(f"Fehler bei Gemini API Aufruf ({model}): {e}")
+            last_error = str(e)
+
+    return None, None, last_error
 
 
 def update_index_html(resort, date_str, notes, price, source):
