@@ -5,7 +5,7 @@ Vollautomatischer Skitage-Tracker und Saisonkarten-Amortisationsrechner für **a
 ## Funktionsweise (Vollautomatisch via GitHub Issues)
 
 1. **Neues Issue am Handy erstellen:**
-   * Klicke auf **Issues** ➔ **Neues Issue** (Vorlage *🎿 Neuer Skitag*).
+   * Klicke auf **Issues** ➔ **Neues Issue** (Vorlage *Neuer Skitag*).
    * Gib einfach das Skigebiet (z. B. `Nassfeld`), optional das Datum und deine Notizen ein.
 2. **Automatische Verarbeitung im Hintergrund:**
    * Eine GitHub Action startet sofort.
